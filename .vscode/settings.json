@@ -10,6 +10,8 @@
         "irq.h": "c",
         "main.h": "c",
         "uart.h": "c",
-        "hal_data.h": "c"
+        "hal_data.h": "c",
+        "iostream": "cpp",
+        "xutility": "cpp"
     }
 }
