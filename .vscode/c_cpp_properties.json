@@ -4,8 +4,7 @@
             "name": "Win32",
             "includePath": [
                 "${workspaceFolder}/**",
-                "D:/Program Files/boost_1_88_0",
-                "D:/canusb/include"
+                "D:/Program Files/boost_1_88_0"
             ],
             "defines": [
                 "_DEBUG",

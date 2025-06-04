@@ -68,9 +68,14 @@ class TOF:
         # blocks the program until a message is recieved (unless the time extends pasr the timeout of 2 seconds)
         # the repsonse is a byte array in python
         response = self.interface.recv(timeout = 2)
+        print(response)
 
         # extracts data from message
         data = response.data
+        
+        while not len(data) >= 8:
+            response = self.interface.recv(timeout = 2)
+            data = response.data
 
         if response == None:
         
@@ -89,6 +94,7 @@ class TOF:
     def interpretMeasurements(self, meas):
 
         dataDictionary = {}
+        print(meas)
         
         # The first byte is moved to the left 2 bytes to make room for the other bytes
         # ex: The sequence goes as follows for a distance represented by 0x23F46E:
@@ -104,17 +110,11 @@ class TOF:
         # according to Wikipedia (https://en.wikipedia.org/wiki/Q_(number_format)):
         # The Q number format is Q{bits for integer}.{bits for fraction}
         # according to the TOF API reference, the raw distance uses 9 bits for the integer and 14 for the fraction
-        distance = distance / 16384.0
+        distance = distance / 1000.0
 
         dataDictionary["distance"] = distance 
 
         amplitude = (meas[3] << 8) + meas[4]
-        
-        # converys the amplitude from UQ12.4
-
-        # according to the TOF API reference, the raw amplitude uses 12 bits for the integer and 4 for the fraction
-        # The U indicates it is unsigned
-        amplitude = amplitude / 16.0
 
         dataDictionary["amplitude"] = amplitude 
 

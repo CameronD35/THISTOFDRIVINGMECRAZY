@@ -20,25 +20,26 @@ class TofSensor {
                 serial_.set_option(serial_port::flow_control(serial_port::flow_control::none));
 
                 send_command("S8\r"); // Set bitrate to 1mbps
-                send_command("0\r"); // opening the channel
+                send_command("O\r"); // opening the channel
             }
 
             void startMeasurements() {
-                send_remote_frame(0x08); // start byte address cmd
+                send_remote_frame(0x08, 0x00); // start byte address cmd
             }
 
             void stopMeasurements() {
-                send_remote_frame(0x09); // stop byte address cmd
+                send_remote_frame(0x09, 0x00); // stop byte address cmd
             }
 
             void asyncReadStart() {
-                std::cout << "grabbing TOF" << std::endl;
+
                 serial_.async_read_some(asio::buffer(read_buf_),
                     boost::bind(&TofSensor::handleRead, this,
                         asio::placeholders::error,
                         asio::placeholders::bytes_transferred));
 
-                std::cout << "TOF grabbed?" << std::endl;
+                Sleep(400);
+
             }
 
     private:
@@ -49,11 +50,13 @@ class TofSensor {
 
             void send_command(const std::string& cmd) {
                 asio::write(serial_, asio::buffer(cmd.c_str(), cmd.size()));
+
+                std::cout << "sending " << cmd << std::endl;
             }
 
-            void send_remote_frame(uint32_t can_id) {
+            void send_remote_frame(uint32_t can_id, int data_length){
                 std::ostringstream cmd;
-                cmd << "R" << std::hex << std::setw(3) << std::setfill('0') << can_id << "\r";
+                cmd << "r" << std::hex << std::setw(3) << std::setfill('0') << can_id << data_length << "\r";
                 send_command(cmd.str());
             }
 
@@ -71,7 +74,7 @@ class TofSensor {
                     std::string frame = read_buffer_.substr(0, pos);
                     read_buffer_.erase(0, pos+1);
 
-                    if (frame[0] == 'T') { // SLCAN data frame
+                    if (frame[0] == 't') { // SLCAN data frame
                         parseCanFrame(frame);
                     }
                 }
@@ -96,36 +99,47 @@ class TofSensor {
             }
 
             void interpretMeasurements(const std::vector<uint8_t>& meas) {
+
+                for (auto i = meas.begin(); i != meas.end(); i++) {
+                    std::cout << *i << " ";
+                }
+
+                std::cout << (meas[0] << 16 | meas[1] << 8 | meas[2]) << std::endl;
+
                 double distance = (meas[0] << 16 | meas[1] << 8 | meas[2]);
                 distance = distance/16384.0;
 
-                double amplitude = (meas[3] << 8 | meas[4]);
+                double amplitude = uint16_t(meas[3] << 8 | meas[4]);
                 amplitude = amplitude/16.0;
 
                 uint8_t signal_quality = meas[5];
                 int16_t status = (meas[6] << 8 | meas[7]);
 
-                if (status >= 0x8000) {
-                    status -= 0x10000;
-                }
+                // if (status >= 0x8000) {
+                //     status -= 0x10000;
+                // }
 
-                std::cout << "Distance: " << distance << std::endl << "Amplitude: " << amplitude << std::endl << "Status: " << status << std::endl;
+                std::cout << "Distance: " << distance << " | Amplitude: " << amplitude << " | Status: " << status << std::endl;
+
             }
 };
 
 int main (int argc, char** argv) {
     try {
+
         asio::io_context io;
         TofSensor sensor(io);
-        sensor.asyncReadStart();
         sensor.startMeasurements();
+        sensor.asyncReadStart();
 
         std::thread([&io]() { io.run(); }).detach();
         std::this_thread::sleep_for(std::chrono::seconds(20));
 
         sensor.stopMeasurements();
         io.stop();
+
     }
+
     catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
     }
