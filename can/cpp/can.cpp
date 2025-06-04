@@ -3,6 +3,7 @@
 #include <iomanip>
 #include <sstream>
 #include <iostream>
+#include <thread>
 
 namespace asio = boost::asio;
 using asio::serial_port;
@@ -19,7 +20,7 @@ class TofSensor {
                 serial_.set_option(serial_port::flow_control(serial_port::flow_control::none));
 
                 send_command("S8\r"); // Set bitrate to 1mbps
-                sesnd_command("0\r"); // opening the channel
+                send_command("0\r"); // opening the channel
             }
 
             void startMeasurements() {
@@ -31,15 +32,18 @@ class TofSensor {
             }
 
             void asyncReadStart() {
+                std::cout << "grabbing TOF" << std::endl;
                 serial_.async_read_some(asio::buffer(read_buf_),
                     boost::bind(&TofSensor::handleRead, this,
                         asio::placeholders::error,
-                        asio::placeholders:bytes_transferred));
+                        asio::placeholders::bytes_transferred));
+
+                std::cout << "TOF grabbed?" << std::endl;
             }
 
     private:
             serial_port serial_;
-            asio:stead_timer timer_;
+            asio::steady_timer timer_;
             std::array<char, 256> read_buf_;
             std::string read_buffer_;
 

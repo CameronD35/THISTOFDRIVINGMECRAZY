@@ -1,13 +1,19 @@
 #include <windows.h>
-#include "lawicel_can.h"
+#include <lawicel_can.h>
 #include <iostream>
 #include <thread>
 #include <cmath>
+#include <stdexcept>
+#include <stdexcpt.h>
+
+#define CANUSB_ACCEPTANCE_CODE_ALL 0x00000000
+#define CANUSB_ACCEPTANCE_MASK_ALL 0xFFFFFFFF
+#define CANUSB_FLAG_TIMESTAMP 0x0001
 
 class TofSensor {
 public:
     TofSensor(const char* port = "COM6", const char* bitrate = "1000") 
-        : handle(INVALID_HANDLE_VALUE) {
+        : handle(-1) {
         
         // Open CAN interface with 1Mbps bitrate
         handle = canusb_Open(port, bitrate, 
@@ -61,7 +67,7 @@ private:
         if(result <= 0) {
             std::cerr << "Frame send failed\n";
             canusb_Close(handle);
-            handle = INVALID_HANDLE_VALUE;
+            handle = -1;
         }
     }
 

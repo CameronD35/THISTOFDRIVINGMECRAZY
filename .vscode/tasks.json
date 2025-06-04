@@ -12,7 +12,12 @@
                 "${fileDirname}/${fileBasenameNoExtension}.exe",
                 "-I",
                 "D:/Program Files/boost_1_88_0",
-                "-lws2_32"
+                "-I",
+                "D:/canusb/include",
+                "-L",
+                "lib",
+                "-lws2_32",
+                "-lcanusbdrv64"
             ],
             "options": {
                 "cwd": "${fileDirname}"
