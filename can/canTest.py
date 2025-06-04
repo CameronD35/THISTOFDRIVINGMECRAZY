@@ -78,7 +78,7 @@ class TOF:
 
         else:
             
-            self.interpretMeasurements(data)
+            return self.interpretMeasurements(data)
 
     # takes measurment data and translates to human-readable format
     # According to the AFBR-S50 API Reference Manual
@@ -124,6 +124,7 @@ class TOF:
 
         # similar to the distance bit shifts but we are only dealing with 2 bytes here (not 3) 
         status = (meas[6] << 8) + meas[7]
+        dataDictionary["status"] = status
         
         # converts status from 16-bit unsigned int to 16-bit signed int
         if not status < 0x8000:
@@ -142,7 +143,7 @@ sensor = TOF(port = 'COM6')
 try:
 
     sensor.startMeasurements()
-
+    
     for i in range(100):
         
         try: 
