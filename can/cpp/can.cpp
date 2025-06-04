@@ -104,13 +104,18 @@ class TofSensor {
                     std::cout << *i << " ";
                 }
 
-                std::cout << (meas[0] << 16 | meas[1] << 8 | meas[2]) << std::endl;
+                // std::cout << (meas[0] << 16 | meas[1] << 8 | meas[2]) << std::endl;
+
+                unsigned char test = meas.front();
+                unsigned char testtwo = meas[3];
+
+                std::cout << test << " | " << testtwo << std::endl;
 
                 double distance = (meas[0] << 16 | meas[1] << 8 | meas[2]);
-                distance = distance/16384.0;
+                distance = distance / 1000;
 
                 double amplitude = uint16_t(meas[3] << 8 | meas[4]);
-                amplitude = amplitude/16.0;
+                amplitude = amplitude;
 
                 uint8_t signal_quality = meas[5];
                 int16_t status = (meas[6] << 8 | meas[7]);
@@ -119,7 +124,7 @@ class TofSensor {
                 //     status -= 0x10000;
                 // }
 
-                std::cout << "Distance: " << distance << " | Amplitude: " << amplitude << " | Status: " << status << std::endl;
+                // std::cout << "Distance: " << distance << " | Amplitude: " << amplitude << " | Status: " << status << std::endl;
 
             }
 };
