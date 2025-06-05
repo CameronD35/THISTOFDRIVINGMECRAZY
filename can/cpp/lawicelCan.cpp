@@ -73,14 +73,14 @@ private:
 
     void interpretMeasurements(const CANMsg& msg) {
         // Implementation matches Python version
-        double distance = (msg.data[0] << 16) | (msg.data[1] << 8) | msg.data[2];
+        double distance = (msg.data[1] << 16) | (msg.data[2] << 8) | msg.data[3];
         distance /= 16384.0;
 
-        double amplitude = (msg.data[3] << 8) | msg.data[4];
+        double amplitude = (msg.data[4] << 8) | msg.data[5];
         amplitude /= 16.0;
 
-        uint8_t signal_quality = msg.data[5];
-        int16_t status = (msg.data[6] << 8) | msg.data[7];
+        uint8_t signal_quality = msg.data[6];
+        int16_t status = (msg.data[7] << 8) | msg.data[8];
         
         // Print or process measurements
         std::cout << "Distance: " << distance 

@@ -76,6 +76,7 @@ class TofSensor {
 
                     if (frame[0] == 't') { // SLCAN data frame
                         parseCanFrame(frame);
+                        std::cout << frame << std::endl;
                     }
                 }
             }
@@ -84,37 +85,56 @@ class TofSensor {
                 uint32_t id;
                 std::istringstream(frame.substr(1, 3)) >> std::hex >> id;
 
+                // We need to chop off the leading and end 8s from the frame
+                std::string new_frame = frame.substr(5, frame.size() - 5);
+
+                std::cout << new_frame << std::endl;
+
                 if (id == 0x01C) {
-                    std::vector<uint8_t> data;
-                    for (size_t i = 4; i < frame.size(); i+=2) {
-                        uint8_t byte;
-                        std::istringstream(frame.substr(i, 2)) >> std::hex >> byte;
+                    std::vector<uint16_t> data;
+
+
+                    for (size_t i = 0; i < new_frame.size(); i += 2) {
+                        uint16_t byte;
+
+                        std::string something = new_frame.substr(i, 2);
+
+                        std::istringstream(something) >> std::hex >> byte;
+
+                        std::cout << something << " | " << byte << " | ";
                         data.push_back(byte);
                     }
 
                     if (data.size() >= 8) {
+
+                        // for (auto i = data.begin(); i != data.end(); i++) {
+                        //     std::cout << *i << " ";
+                        // }
+
+                        std::cout << "\n";
+
                         interpretMeasurements(data);
                     }
                 }
             }
 
-            void interpretMeasurements(const std::vector<uint8_t>& meas) {
+            void interpretMeasurements(const std::vector<uint16_t>& meas) {
 
-                for (auto i = meas.begin(); i != meas.end(); i++) {
-                    std::cout << *i << " ";
-                }
+                // for (auto i = meas.begin(); i != meas.end(); i++) {
+                //     std::cout << *i << " ";
+                // }
 
                 // std::cout << (meas[0] << 16 | meas[1] << 8 | meas[2]) << std::endl;
 
-                unsigned char test = meas.front();
+                unsigned char test = meas[0];
                 unsigned char testtwo = meas[3];
 
-                std::cout << test << " | " << testtwo << std::endl;
+                // std::cout << test << " | " << testtwo << std::endl;
 
-                double distance = (meas[0] << 16 | meas[1] << 8 | meas[2]);
-                distance = distance / 1000;
+                double distance = (meas[0] << 16) | (meas[1] << 8) | (meas[2]);
+                distance = distance / 1000.0;
 
-                double amplitude = uint16_t(meas[3] << 8 | meas[4]);
+                double amplitude = (meas[3] << 8) + (meas[4]);
                 amplitude = amplitude;
 
                 uint8_t signal_quality = meas[5];
@@ -124,7 +144,7 @@ class TofSensor {
                 //     status -= 0x10000;
                 // }
 
-                // std::cout << "Distance: " << distance << " | Amplitude: " << amplitude << " | Status: " << status << std::endl;
+                std::cout << "Distance: " << distance << " | Amplitude: " << amplitude << " | Status: " << status << std::endl;
 
             }
 };
