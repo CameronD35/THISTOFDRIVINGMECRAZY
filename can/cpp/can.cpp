@@ -4,14 +4,35 @@
 #include <sstream>
 #include <iostream>
 #include <thread>
+#include <fstream>
+
+#define OUTPUT_FILE_PATH "D:/Data/TOF/"
 
 namespace asio = boost::asio;
 using asio::serial_port;
 
+
+struct DataStruct {
+
+    double distance;
+    int amplitude;
+    uint16_t signalQuality;
+    int16_t status;
+    std::chrono::nanoseconds timestamp;
+};
+
 class TofSensor {
     public:
-        TofSensor(asio::io_context& io, const std::string& port = "COM6") // might need to change port, should be this since running off windows os?
+        TofSensor(asio::io_context& io, std::string outputFile, const std::string& port = "COM6") // might need to change port, should be this since running off windows os?
             : serial_(io, port), timer_(io) {
+
+                // initialize output filepath for TOF
+                filepath = outputFile;
+
+                // Open a file and initialize it with a row of entries then closes it
+                fileStream.open(filepath, std::ios::app);
+                fileStream << "distance,amplitude,signal_quality,status,timestamp\n";
+                fileStream.close();
 
                 // Config of serial ports for SLCAN
                 // 1Mbps, 8 character bits, no stop bits, no parity, no flow control
@@ -23,13 +44,18 @@ class TofSensor {
 
                 send_command("S8\r"); // Set bitrate to 1mbps
                 send_command("O\r"); // opening the channel
+
+
             }
 
             void startMeasurements() {
+                fileStream.open(filepath, std::ios::app);
                 send_remote_frame(0x08, 0x00); // start byte address cmd
             }
 
             void stopMeasurements() {
+                fileStream.close();
+
                 send_remote_frame(0x09, 0x00); // stop byte address cmd
             }
 
@@ -40,7 +66,7 @@ class TofSensor {
                         asio::placeholders::error,
                         asio::placeholders::bytes_transferred));
 
-                Sleep(400);
+                Sleep(10);
 
             }
 
@@ -49,6 +75,9 @@ class TofSensor {
             asio::steady_timer timer_;
             std::array<char, 256> read_buf_;
             std::string read_buffer_;
+            std::ofstream fileStream;
+            std::string filepath;
+            std::chrono::_V2::system_clock::time_point measCycleClock_Start = std::chrono::high_resolution_clock::now();
 
             // sends command via Lawicel CAN/CAN232 Protocol
             // Protocol pdf: https://www.canusb.com/files/canusb_manual.pdf
@@ -84,7 +113,7 @@ class TofSensor {
 
                     if (frame[0] == 't') { // SLCAN data frame
                         parseCanFrame(frame);
-                        std::cout << frame << std::endl;
+                        //std::cout << frame << std::endl;
                     }
                 }
             }
@@ -95,8 +124,6 @@ class TofSensor {
 
                 // We need to chop off the leading and end 8s from the frame
                 std::string new_frame = frame.substr(5, frame.size() - 5);
-
-                std::cout << new_frame << std::endl;
 
                 if (id == 0x01C) {
                     std::vector<uint16_t> data;
@@ -109,7 +136,6 @@ class TofSensor {
 
                         std::istringstream(raw_byte) >> std::hex >> formatted_byte;
 
-                        std::cout << raw_byte << " | " << formatted_byte << " | ";
                         data.push_back(formatted_byte);
                     }
 
@@ -119,45 +145,88 @@ class TofSensor {
                         //     std::cout << *i << " ";
                         // }
 
-                        std::cout << "\n";
-
                         interpretMeasurements(data);
+
+
                     }
                 }
             }
 
+            void writeMeasurementsToFile(DataStruct data) {
+
+                // std::cout << "FILE IS OPEN???? " << fileStream.is_open() << std::endl;
+
+                if (fileStream.is_open()) {
+
+                    fileStream << data.distance << "," << data.amplitude << "," << data.signalQuality << "," << data.status << "," << /*std::to_string(data.timestamp) <<*/ "\n";
+
+                } else {
+
+                    std::cout << "There is no open file!" << std::endl;
+
+                }
+
+            }
+
             void interpretMeasurements(const std::vector<uint16_t>& meas) {
+
+                DataStruct measurementData; 
 
                 // measured in mm
                 double distance = (meas[0] << 16) | (meas[1] << 8) | (meas[2]);
 
                 // convert from mm to m
-                distance = distance / 1000.0;
+                measurementData.distance = distance / 1000.0;
 
                 // measured in LSB
-                double amplitude = (meas[3] << 8) + (meas[4]);
+                measurementData.amplitude = (meas[3] << 8) + (meas[4]);
 
                 // In percentage (0-100%)
-                uint8_t signal_quality = meas[5];
+                measurementData.signalQuality = meas[5];
 
                 // see https://broadcom.github.io/AFBR-S50-API/group__argus__status.html#gaaabdaf7ee58ca7269bd4bf24efcde092
                 // for error codes
-                int16_t status = (meas[6] << 8 | meas[7]);
+                measurementData.status = (meas[6] << 8 | meas[7]);
+
+                auto measCycleClock_Point = std::chrono::high_resolution_clock::now();
+
+                auto elapsedTime = measCycleClock_Point - measCycleClock_Start;
+
+                measurementData.timestamp = elapsedTime;
 
                 // output values
-                std::cout << "Distance: " << distance << " | Amplitude: " << amplitude << " | Status: " << status << std::endl;
+                // std::cout << "Distance: " << measurementData.distance << " | Amplitude: " << measurementData.amplitude << " | Signal Quality: " << measurementData.signalQuality << " | Status: " << measurementData.status << std::endl;
+
+                writeMeasurementsToFile(measurementData);
 
             }
 };
 
+time_t grabCurrentTime() {
+
+    auto rawCurrentTime = std::chrono::system_clock::now();
+
+    time_t currentTime = std::chrono::system_clock::to_time_t(rawCurrentTime);
+
+    return currentTime;
+
+}
+
 int main (int argc, char** argv) {
+
     try {
 
         // create IO context allowing for read/write operations
         asio::io_context io;
 
+        time_t now = grabCurrentTime();
+
+        std::string filename = OUTPUT_FILE_PATH + std::to_string(now) + ".csv";
+
         // creates TOF sensor instance
-        TofSensor sensor(io);
+        TofSensor sensor(io, filename);
+
+        
 
         // begin measurements (send 0x08 to TOF)
         sensor.startMeasurements();
@@ -180,8 +249,11 @@ int main (int argc, char** argv) {
     }
 
     catch (const std::exception& e) {
+
         std::cerr << "Error: " << e.what() << std::endl;
+
     }
     
     return 0;
+
 }
