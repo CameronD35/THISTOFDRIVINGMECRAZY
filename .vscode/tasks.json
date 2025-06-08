@@ -9,9 +9,11 @@
                 "-g",
                 "${file}",
                 "-o",
-                "${fileDirname}/${fileBasenameNoExtension}.exe",
+                "${fileDirname}/executables/${fileBasenameNoExtension}.exe",
                 "-I",
                 "D:/Program Files/boost_1_88_0",
+                "-I",
+                "C:/msys64/ucrt64/include",
                 "-lws2_32",
             ],
             "options": {

@@ -3,22 +3,34 @@
 #include <iomanip>
 #include <sstream>
 #include <iostream>
+#include <stdio.h>
+#include <conio.h>
+#include <tchar.h>
+#include <string>
 #include <thread>
 #include <fstream>
+#include <chrono>
+
+#include <windows.h>
 
 #define OUTPUT_FILE_PATH "D:/Data/TOF/"
+#define BUFFER_SIZE 100
 
 namespace asio = boost::asio;
 using asio::serial_port;
 
+HANDLE fileHandle;
+typedef const wchar_t* win_string;
 
 struct DataStruct {
 
     double distance;
     int amplitude;
+    short memsAngle;
     uint16_t signalQuality;
     int16_t status;
-    std::chrono::nanoseconds timestamp;
+    std::chrono::milliseconds timestamp;
+
 };
 
 class TofSensor {
@@ -77,7 +89,11 @@ class TofSensor {
             std::string read_buffer_;
             std::ofstream fileStream;
             std::string filepath;
+
+            // GRABS TIME OF MEASUREMENT CLOCK CYCLE
+            // THIS IS WHERE WE NEED TO ADJUST
             std::chrono::_V2::system_clock::time_point measCycleClock_Start = std::chrono::high_resolution_clock::now();
+            
 
             // sends command via Lawicel CAN/CAN232 Protocol
             // Protocol pdf: https://www.canusb.com/files/canusb_manual.pdf
@@ -158,7 +174,7 @@ class TofSensor {
 
                 if (fileStream.is_open()) {
 
-                    fileStream << data.distance << "," << data.amplitude << "," << data.signalQuality << "," << data.status << "," << /*std::to_string(data.timestamp) <<*/ "\n";
+                    fileStream << data.distance << "," << data.amplitude << "," << data.signalQuality << "," << data.status << "," << data.timestamp.count() << "\n";
 
                 } else {
 
@@ -188,11 +204,13 @@ class TofSensor {
                 // for error codes
                 measurementData.status = (meas[6] << 8 | meas[7]);
 
+                // GRABS THE CURRENT TIME OF CLOCK CYCLE 
                 auto measCycleClock_Point = std::chrono::high_resolution_clock::now();
 
-                auto elapsedTime = measCycleClock_Point - measCycleClock_Start;
-
-                measurementData.timestamp = elapsedTime;
+                // SUPPOSED TO GET TIME DIFFERENCE BUT THIS METHOD WON'T WORK
+                // USES LINE 83 AND LINE 194 TIMES
+                //auto elapsedTime = std::chrono::duration_cast<std::chrono::nanoseconds>(measCycleClock_Point - measCycleClock_Start).count();  //measCycleClock_Point - measCycleClock_Start;
+                measurementData.timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(measCycleClock_Point - measCycleClock_Start);
 
                 // output values
                 // std::cout << "Distance: " << measurementData.distance << " | Amplitude: " << measurementData.amplitude << " | Signal Quality: " << measurementData.signalQuality << " | Status: " << measurementData.status << std::endl;
@@ -212,6 +230,82 @@ time_t grabCurrentTime() {
 
 }
 
+int connectToMemsClient(char* output) {
+    std::cout << "====C++====\r\n";
+    win_string name = TEXT("\\\\.\\pipe\\rsx_mems_pipe");
+
+    // Try to access pipe
+    fileHandle = CreateFile(name, GENERIC_READ | GENERIC_WRITE,
+        0, NULL, OPEN_EXISTING, 0, NULL);
+
+    // Keep trying to connect if failed.
+    while (fileHandle == INVALID_HANDLE_VALUE)
+    {
+        // Open pipe.
+        fileHandle = CreateFile(name, GENERIC_READ | GENERIC_WRITE, 
+            0, NULL, OPEN_EXISTING, 0, NULL);
+        Sleep(100);
+    }
+}
+
+int readFromMems() {
+    char* buffer = new char[BUFFER_SIZE];
+    memset(buffer, 0, BUFFER_SIZE);
+
+    // The ReadString will halt until a message is received.
+    ReadString(buffer);
+    std::cout << "recv<< " << buffer << "\r\n";
+
+    // We are asked for the angle.
+    if (strcmp(buffer, "Angle request.\0") == 0)
+    {
+        std::string str = std::string("Angle: ").append(std::to_string(angle)).append("\r\n");
+        const char* msg = str.c_str();
+
+        // DO SOME WORK HERE
+
+        // Send data to C#
+        WriteFile(fileHandle, msg, strlen(msg), nullptr, NULL);
+        std::cout << "send>> " << msg << "\r\n";
+        angle++;
+    }
+    else if (std::string(buffer).rfind("SERVER ERROR NOT", 0) == 0)
+    {
+        // We have an error.
+        std::cout << "We have a server error.";
+    }
+    else if (std::string(buffer).rfind("Set to ", 0) == 0)
+    {
+        // The angle returned is the actual angle.
+        std::string actualAngleString = std::string(buffer).substr(7);
+        double actualAngle = std::stod(actualAngleString); // https://stackoverflow.com/a/30809670
+
+        // Do something with actualAngle
+        
+
+    }
+}
+
+
+// Credit https://dev.to/gabbersepp/ipc-between-c-and-c-by-using-named-pipes-4em9
+void ReadString(char* output)
+{
+    ULONG read = 0;
+    int index = 0;
+    do
+    {
+        // ReadFile halts until we have data from C# to read
+        (void) ReadFile(fileHandle, output + index++, 1, &read, NULL);
+    } while (read > 0 && *(output + index - 1) != 0);
+}
+
+int getCurrentMemsAngle() {
+    
+    
+    return 0;
+
+}
+
 int main (int argc, char** argv) {
 
     try {
@@ -219,6 +313,7 @@ int main (int argc, char** argv) {
         // create IO context allowing for read/write operations
         asio::io_context io;
 
+        // grab current time for file timestamp
         time_t now = grabCurrentTime();
 
         std::string filename = OUTPUT_FILE_PATH + std::to_string(now) + ".csv";
